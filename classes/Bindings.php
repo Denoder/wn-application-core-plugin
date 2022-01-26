@@ -102,7 +102,7 @@ class Bindings {
 
         foreach($this->getInstances() as $key => $aliases) {
             foreach ($aliases as $alias) {
-                $this->app->singleton($alias);
+                $this->app->bind($alias);
                 $this->app->alias($key, $alias);
             }
         }
