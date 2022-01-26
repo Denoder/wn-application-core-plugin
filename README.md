@@ -14,4 +14,4 @@ $this->app->singleton('application.core.loader', function ($app) {
 });
 ```
 
-The first parameter is the application instance, the second parameter is an array of singletons you want to register, and the 3rd parameter is an array of instacnes you want to register.
+The first parameter is the application instance, the second parameter is an array of singletons you want to register, and the 3rd parameter is an array of instances you want to register.
