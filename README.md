@@ -1,0 +1,1 @@
+# wn-application-core-plugin
