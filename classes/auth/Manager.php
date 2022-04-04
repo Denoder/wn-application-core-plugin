@@ -492,6 +492,16 @@ class Manager implements StatefulGuard
     }
 
     /**
+     * Determine if the guard has a user instance.
+     *
+     * @return bool
+     */
+    public function hasUser()
+    {
+        return ! is_null($this->user);
+    }
+
+    /**
      * Check to see if the user is logged in and activated, and hasn't been banned or suspended.
      *
      * @return bool
