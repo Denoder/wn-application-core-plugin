@@ -2,22 +2,30 @@
 
 namespace Application\Core\Classes\Auth;
 
-use Cookie;
-use Session;
-use Request;
+use Illuminate\Support\Facades\Cookie;
+use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Facades\Request;
 use Illuminate\Support\Traits\Macroable;
 use Illuminate\Contracts\Auth\StatefulGuard;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Winter\Storm\Auth\AuthenticationException;
 
+/**
+ * Authentication manager
+ */
 class Manager implements StatefulGuard
 {
     use Macroable;
 
     /**
-     * @var Models\User The currently logged in user
+     * @var \Winter\Storm\Auth\Models\User The currently logged in user
      */
     protected $user;
+
+    /**
+     * @var \Winter\Storm\Auth\Models\User|null The user that is impersonating the currently logged in user when applicable
+     */
+    protected $impersonator;
 
     /**
      * @var array In memory throttle cache [md5($userId.$ipAddress) => $this->throttleModel]
@@ -86,7 +94,7 @@ class Manager implements StatefulGuard
     /**
      * Creates a new instance of the user model
      *
-     * @return Models\User
+     * @return \Winter\Storm\Auth\Models\User
      */
     public function createUserModel()
     {
@@ -102,6 +110,7 @@ class Manager implements StatefulGuard
     protected function createUserModelQuery()
     {
         $model = $this->createUserModel();
+        /** @var \Winter\Storm\Database\Builder */
         $query = $model->newQuery();
         $this->extendUserQuery($query);
 
@@ -124,7 +133,7 @@ class Manager implements StatefulGuard
      * @param array $credentials
      * @param bool $activate
      * @param bool $autoLogin
-     * @return Models\User
+     * @return \Winter\Storm\Auth\Models\User
      */
     public function register(array $credentials, $activate = false, $autoLogin = true)
     {
@@ -138,6 +147,7 @@ class Manager implements StatefulGuard
 
         // Prevents revalidation of the password field
         // on subsequent saves to this model object
+        /** @phpstan-ignore-next-line */
         $user->password = null;
 
         if ($autoLogin) {
@@ -206,7 +216,7 @@ class Manager implements StatefulGuard
      *
      * @param array $credentials The credentials to find a user by
      * @throws AuthenticationException If the credentials are invalid
-     * @return Models\User The requested user
+     * @return \Winter\Storm\Auth\Models\User The requested user
      */
     public function findUserByCredentials(array $credentials)
     {
@@ -234,6 +244,7 @@ class Manager implements StatefulGuard
             }
         }
 
+        /** @var \Winter\Storm\Auth\Models\User */
         $user = $query->first();
         if (!$this->validateUserModel($user)) {
             throw new AuthenticationException('A user was not found with the given credentials.');
@@ -278,7 +289,7 @@ class Manager implements StatefulGuard
     /**
      * Creates an instance of the throttle model
      *
-     * @return Models\Throttle
+     * @return \Winter\Storm\Auth\Models\Throttle
      */
     public function createThrottleModel()
     {
@@ -291,7 +302,7 @@ class Manager implements StatefulGuard
      *
      * @param string $loginName
      * @param string $ipAddress
-     * @return Models\Throttle
+     * @return \Winter\Storm\Auth\Models\Throttle
      */
     public function findThrottleByLogin($loginName, $ipAddress)
     {
@@ -309,7 +320,7 @@ class Manager implements StatefulGuard
      *
      * @param integer $userId
      * @param string $ipAddress
-     * @return Models\Throttle
+     * @return \Winter\Storm\Auth\Models\Throttle
      */
     public function findThrottleByUserId($userId, $ipAddress = null)
     {
@@ -328,7 +339,10 @@ class Manager implements StatefulGuard
             });
         }
 
-        if (!$throttle = $query->first()) {
+        /** @var \Winter\Storm\Auth\Models\Throttle|null */
+        $throttle = $query->first();
+
+        if (!$throttle) {
             $throttle = $this->createThrottleModel();
             $throttle->user_id = $userId;
             if ($ipAddress) {
@@ -351,7 +365,7 @@ class Manager implements StatefulGuard
      * @param array $credentials The user login details
      * @param bool $remember Store a non-expire cookie for the user
      * @throws AuthenticationException If authentication fails
-     * @return Models\User The successfully logged in user
+     * @return bool If authentication was successful
      */
     public function attempt(array $credentials = [], $remember = false)
     {
@@ -373,7 +387,7 @@ class Manager implements StatefulGuard
      * Validate a user's credentials, method used internally.
      *
      * @param  array  $credentials
-     * @return User
+     * @return \Winter\Storm\Auth\Models\User|null
      */
     protected function validateInternal(array $credentials = [])
     {
@@ -403,7 +417,9 @@ class Manager implements StatefulGuard
         /*
          * If throttling is enabled, check they are not locked out first and foremost.
          */
-        if ($this->useThrottle) {
+        $useThrottle = $this->useThrottle;
+
+        if ($useThrottle) {
             $throttle = $this->findThrottleByLogin($credentials[$loginName], $this->ipAddress);
             $throttle->check();
         }
@@ -415,14 +431,15 @@ class Manager implements StatefulGuard
             $user = $this->findUserByCredentials($credentials);
         }
         catch (AuthenticationException $ex) {
-            if ($this->useThrottle) {
+            if ($useThrottle) {
                 $throttle->addLoginAttempt();
             }
+            $user = null;
 
             throw $ex;
         }
 
-        if ($this->useThrottle) {
+        if ($useThrottle) {
             $throttle->clearLoginAttempts();
         }
 
@@ -449,7 +466,7 @@ class Manager implements StatefulGuard
     /**
      * Stores the user persistence information in the session (and cookie when $remember = true)
      *
-     * @param Models\User $user
+     * @param \Winter\Storm\Auth\Models\User $user
      * @param boolean $remember
      * @return void
      */
@@ -492,7 +509,7 @@ class Manager implements StatefulGuard
     }
 
     /**
-     * Determine if the guard has a user instance.
+     * Determine if the guard has a user instance. (Laravel 9.x)
      *
      * @return bool
      */
@@ -621,6 +638,7 @@ class Manager implements StatefulGuard
      * Logs in the given user and sets properties
      * in the session.
      * @throws AuthenticationException If the user is not activated and $this->requireActivation = true
+     * @phpstan-param \Winter\Storm\Auth\Models\User $user
      */
     public function login(Authenticatable $user, $remember = true)
     {
@@ -656,7 +674,7 @@ class Manager implements StatefulGuard
      *
      * @param  mixed  $id
      * @param  bool   $remember
-     * @return \Illuminate\Contracts\Auth\Authenticatable
+     * @return \Illuminate\Contracts\Auth\Authenticatable|false
      */
     public function loginUsingId($id, $remember = false)
     {
@@ -713,11 +731,11 @@ class Manager implements StatefulGuard
     /**
      * Impersonates the given user and sets properties in the session but not the cookie.
      *
-     * @param Models\User $impersonatee
-     * @throws Exception If the current user is not permitted to impersonate the provided user
+     * @param \Winter\Storm\Auth\Models\User $impersonatee
+     * @throws AuthorizationException If the current user is not permitted to impersonate the provided user
      * @return void
      */
-    public function impersonate($user)
+    public function impersonate($impersonatee)
     {
         // If the session is already being impersonated, then use the original impersonator
         if ($this->isImpersonator()) {
@@ -766,9 +784,14 @@ class Manager implements StatefulGuard
         // Store the current user as the impersonator if this is the first impersonation
         if (!$this->isImpersonator()) {
             Session::put($this->sessionKey . '_impersonator', $impersonatorId ?: false);
+            $this->impersonator = $impersonator;
         }
     }
 
+    /**
+     * Stop the current session being impersonated and
+     * authenticate as the impersonator again
+     */
     public function stopImpersonate()
     {
         // Get the current user and the impersonating user
@@ -807,6 +830,7 @@ class Manager implements StatefulGuard
 
         // Remove the impersonator flag
         Session::forget($this->sessionKey . '_impersonator');
+        $this->impersonator = null;
     }
 
     /**
@@ -822,7 +846,7 @@ class Manager implements StatefulGuard
     /**
      * Get the original user doing the impersonation
      *
-     * @return mixed Returns the User model for the impersonator if able, false if not
+     * @return \Winter\Storm\Auth\Models\User|false Returns the User model for the impersonator if able, `false` if not
      */
     public function getImpersonator()
     {
@@ -835,7 +859,14 @@ class Manager implements StatefulGuard
             return false;
         }
 
-        return $this->createUserModel()->find($impersonatorId);
+        if ($this->impersonator) {
+            return $this->impersonator;
+        }
+
+        /** @var \Winter\Storm\Auth\Models\User|false */
+        $impersonator = $this->createUserModel()->find($impersonatorId) ?? false;
+
+        return $this->impersonator = $impersonator;
     }
 
     /**
