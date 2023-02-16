@@ -27,12 +27,13 @@ class Plugin extends PluginBase
     }
 
     /**
-     * Boot method, called right before the request route.
+     * Register method, called when the plugin is first registered.
      *
-     * @return array
+     * @return void
      */
-    public function boot()
+    public function register()
     {
         $this->app->register(ServiceProvider::class);
+        $this->app->register(\Illuminate\Auth\AuthServiceProvider::class);
     }
 }
