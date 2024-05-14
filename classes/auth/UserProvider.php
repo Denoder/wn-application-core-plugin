@@ -2,6 +2,7 @@
 
 namespace Application\Core\Classes\Auth;
 
+use Illuminate\Session\SessionManager;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Session;
@@ -9,13 +10,14 @@ use Illuminate\Support\Facades\Request;
 use Illuminate\Support\Traits\Macroable;
 use Illuminate\Contracts\Auth\StatefulGuard;
 use Illuminate\Contracts\Auth\Authenticatable;
+
 use Winter\Storm\Auth\AuthenticationException;
-use Illuminate\Session\SessionManager;
+use Winter\Storm\Auth\AuthorizationException;
 
 /**
- * Authentication manager
+ * User Provider
  */
-class Manager implements StatefulGuard
+class UserProvider implements StatefulGuard
 {
     use Macroable;
 
@@ -80,7 +82,12 @@ class Manager implements StatefulGuard
     public $ipAddress = '0.0.0.0';
 
     /**
-     * Create a new Auth manager instance.
+     * Session manager instance.
+     */
+    protected SessionManager $sessionManager;
+
+    /**
+     * Create a new authentication guard.
      *
      * @return void
      */
@@ -171,7 +178,7 @@ class Manager implements StatefulGuard
     /**
      * Returns the current user, if any.
      *
-     * @return mixed (Models\User || null)
+     * @return \Winter\Storm\Auth\Models\User|null
      */
     public function getUser()
     {
@@ -186,7 +193,7 @@ class Manager implements StatefulGuard
      * Finds a user by the login value.
      *
      * @param string $id
-     * @return mixed (Models\User || null)
+     * @return \Winter\Storm\Auth\Models\User|null
      */
     public function findUserById($id)
     {
@@ -450,6 +457,78 @@ class Manager implements StatefulGuard
     }
 
     /**
+     * Retrieve a user by their unique identifier.
+     *
+     * @param  mixed  $identifier
+     * @return \Illuminate\Contracts\Auth\Authenticatable|null
+     */
+    public function retrieveById($identifier)
+    {
+        return $this->findUserById($identifier);
+    }
+
+    /**
+     * Retrieve a user by the given credentials.
+     *
+     * @param  array  $credentials
+     * @return \Illuminate\Contracts\Auth\Authenticatable|null
+     */
+    public function retrieveByCredentials(array $credentials)
+    {
+        return $this->validateInternal($credentials);
+    }
+
+    /**
+     * Retrieve a user by their unique identifier and "remember me" token.
+     *
+     * @param  mixed  $identifier
+     * @param  string  $token
+     * @return \Illuminate\Contracts\Auth\Authenticatable|null
+     */
+    public function retrieveByToken($identifier, $token)
+    {
+        $user = $this->findUserById($identifier);
+
+        if (!$user || !$user->getRememberToken() || !hash_equals($user->getRememberToken(), $token)) {
+            return null;
+        }
+
+        return $user;
+    }
+
+    /**
+     * Update the "remember me" token for the given user in storage.
+     *
+     * @param  \Illuminate\Contracts\Auth\Authenticatable  $user
+     * @param  string  $token
+     * @return void
+     */
+    public function updateRememberToken(Authenticatable $user, $token)
+    {
+        $user->setRememberToken($token);
+
+        $timestamps = $user->timestamps;
+
+        $user->timestamps = false;
+
+        $user->save();
+
+        $user->timestamps = $timestamps;
+    }
+
+    /**
+     * Validate a user against the given credentials.
+     *
+     * @param  \Illuminate\Contracts\Auth\Authenticatable  $user
+     * @param  array  $credentials
+     * @return bool
+     */
+    public function validateCredentials(Authenticatable $user, array $credentials)
+    {
+        return ($user === $this->validateInternal($credentials));
+    }
+
+    /**
      * Attempts to authenticate the given user according to the passed credentials.
      *
      * @param array $credentials The user login details
@@ -629,7 +708,7 @@ class Manager implements StatefulGuard
 
         $this->useSession = true;
 
-        return !!$user;
+        return $user;
     }
 
     /**
