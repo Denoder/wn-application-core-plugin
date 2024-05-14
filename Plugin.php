@@ -22,7 +22,7 @@ class Plugin extends PluginBase
         return [
             'name'        => 'WinterCMS Application Core Loader',
             'description' => '',
-            'author'      => 'Christian McQuilkin',
+            'author'      => 'Denoder',
             'icon'        => 'icon-key'
         ];
     }
