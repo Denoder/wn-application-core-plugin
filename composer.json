@@ -1,7 +1,7 @@
 {
     "name": "teranode/wn-application-core-plugin",
     "description": "Laravel class loader plugin for Winter CMS",
-    "homepage": "https://github.com/Teranode/wn-application-core-plugin",
+    "homepage": "https://github.com/Denoder/wn-application-core-plugin",
     "type": "winter-plugin",
     "license": "BSD-3-Clause",
     "authors": [
