@@ -6,8 +6,7 @@
     "license": "BSD-3-Clause",
     "authors": [
         {
-            "name": "Christian McQuilkin",
-            "email": "chris.e.mcquilkin@gmail.com"
+            "name": "Denoder"
         }
     ],
     "require": {
